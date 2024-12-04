@@ -1,0 +1,239 @@
+-- Le nombre de produits vendus par catégorie et par mois, avec comparaison et taux de variation par rapportau même mois de l’année précédente.
+-- Nous avons créé une contenant le quantité de produits vendus par catégorie et par date. Puis une deuxième avec les mêmes informations mais où nous avons ajouté +1 à la valeur de l'année.
+-- Ensuite nous avons créé une jointure entre ces deux tables ou chaque colonne correspondait à la même colonne de l'autre table (LEFT / UNION / RIGHT pour n'oublier aucune valeur qui n'aurait pas de correspondance l'année précédente).
+-- Avec l'ajout de +1 aux années de notre 2e table, cela nous permet de faire correspondre les valeurs de 2022 (2023 dans cette table) avec les vraies valeurs de 2023 et donc de pouvoir comparer les valeurs à N-1.
+
+CREATE OR REPLACE VIEW ventes AS(
+                                  SELECT
+                                    products.productLine categorie, 
+                                    MONTHNAME(orders.orderDate) mois, 
+                                    YEAR(orders.orderDate) année, 
+                                    SUM(orderdetails.quantityOrdered) total_commande,
+                                    customers.country pays
+                                  FROM products
+                                  JOIN orderdetails
+                                    ON products.productCode = orderdetails.productCode
+                                  JOIN orders
+                                    ON orderdetails.orderNumber = orders.orderNumber
+                                  JOIN customers
+                                    ON orders.customerNumber = customers.customerNumber
+                                  GROUP BY categorie, mois, année, pays
+                                    );
+CREATE OR REPLACE VIEW ventes_n_moins1 AS(
+                                          SELECT
+                                            products.productLine categorie,
+                                            MONTHNAME(orders.orderDate) mois,
+                                            YEAR(orders.orderDate) + 1 AS année,
+                                            SUM(orderdetails.quantityOrdered) AS total_commande_n_moins1,
+                                            customers.country pays
+                                          FROM products
+                                          JOIN orderdetails
+                                            ON products.productCode = orderdetails.productCode
+                                          JOIN orders
+                                            ON orderdetails.orderNumber = orders.orderNumber
+                                          JOIN customers
+                                            ON orders.customerNumber = customers.customerNumber
+                                          GROUP BY categorie, mois, année, pays
+                                                );
+
+CREATE OR REPLACE VIEW comparaison_ventes_categories AS (
+                                                          SELECT 
+                                                            ventes.categorie categorie,
+                                                            ventes.mois mois,
+                                                            ventes.année année,
+                                                            ventes.pays,
+                                                            ventes.total_commande total_commande,
+                                                            ventes_n_moins1.total_commande_n_moins1 total_commande_n_moins1,
+                                                            ventes.total_commande - ventes_n_moins1.total_commande_n_moins1 comparaison,
+                                                            ROUND((ventes.total_commande - ventes_n_moins1.total_commande_n_moins1)*100/ ventes_n_moins1.total_commande_n_moins1, 2) variation
+                                                          FROM ventes
+                                                          LEFT JOIN ventes_n_moins1
+                                                            ON ventes.categorie = ventes_n_moins1.categorie AND ventes.mois = ventes_n_moins1.mois AND ventes.année = ventes_n_moins1.année AND ventes.pays = ventes_n_moins1.pays
+                                                          UNION
+                                                          SELECT 
+                                                            ventes_n_moins1.categorie categorie,
+                                                            ventes_n_moins1.mois mois,
+                                                            ventes_n_moins1.année année,
+                                                            ventes_n_moins1.pays,
+                                                            ventes.total_commande total_commande,
+                                                            ventes_n_moins1.total_commande_n_moins1 total_commande_n_moins1,
+                                                            ventes.total_commande - ventes_n_moins1.total_commande_n_moins1 comparaison,
+                                                            ROUND((ventes.total_commande - ventes_n_moins1.total_commande_n_moins1)*100/ ventes_n_moins1.total_commande_n_moins1, 2) variation
+                                                          FROM ventes
+                                                          RIGHT JOIN ventes_n_moins1
+                                                            ON ventes.categorie = ventes_n_moins1.categorie AND ventes.mois = ventes_n_moins1.mois AND ventes.année = ventes_n_moins1.année AND ventes.pays = ventes_n_moins1.pays
+                                                          ORDER BY categorie ASC
+                                                          );
+                                                            
+                                                            
+-- Le chiffre d’affaires des commandes des deux derniers mois de chaque pays.
+
+CREATE VIEW ca_deux_derniers_mois AS (
+                                      WITH derniers_mois_pays AS (
+                                                    SELECT 
+                                                    customers.country pays,
+                                                    DATE_FORMAT(orders.orderDate, "%Y %m") date,
+                                                    SUM(orderdetails.quantityOrdered*orderdetails.priceEach) CA,
+                                                    DENSE_RANK() OVER (PARTITION BY customers.country ORDER BY DATE_FORMAT(orders.orderDate, "%Y %m") DESC) rang
+                                                    FROM orderdetails
+                                                    JOIN orders
+                                                      ON orderdetails.orderNumber = orders.orderNumber
+                                                    JOIN customers
+                                                      ON orders.customerNumber = customers.customerNumber
+                                                    GROUP BY pays, date
+                                                    )
+                                      SELECT 
+                                      pays,
+                                      date,
+                                      CA 
+                                      FROM derniers_mois_pays
+                                      WHERE rang <=2);
+
+
+-- Les commandes qui n’ont pas encore été payées
+-- Nous avons ajouté DISTINCT dans nos sommes pour éviter qu'un paiement enregistré sur plusieurs commandes ne soit pris en compte plusieurs fois.
+
+CREATE OR REPLACE VIEW commandes_impayees AS (
+                                              SELECT
+                                              c.customerNumber,
+                                              c.customerName,
+                                              c.phone,
+                                              c.country,
+                                              c.salesRepEmployeeNumber,
+                                              e.lastname,
+                                              e.firstname,
+                      												SUM(DISTINCT od.quantityOrdered*od.priceEach) montant_commande,
+                      												SUM(DISTINCT p.amount) paiements,
+                      												SUM(DISTINCT od.quantityOrdered*od.priceEach) - SUM(DISTINCT p.amount) reste_a_payer
+                      												FROM orderdetails od
+                      												JOIN orders o
+                      													On od.orderNumber = o.orderNumber
+                      												JOIN customers c
+                      													ON o.customerNumber = c.customerNumber
+                      												JOIN payments p
+                      													ON c.customerNumber = p.customerNumber
+                      												JOIN employees e
+                      													ON e.employeeNumber = c.salesRepEmployeeNumber
+                      												GROUP BY customerNumber
+                      												HAVING montant_commande > paiements
+                                                                      );
+
+
+-- Le chiffre d’affaires des deux derniers mois (fevrier et mars 2024) par pays.
+
+CREATE VIEW pays_deux_derniers_mois AS (
+                                        WITH derniers_mois_pays AS (
+                                                                    SELECT 
+                                                                    customers.country pays,
+                                                                    DATE_FORMAT(orders.orderDate, "%Y %m") date,
+                                                                    SUM(orderdetails.quantityOrdered*orderdetails.priceEach) CA,
+                                                                    DENSE_RANK() OVER (ORDER BY DATE_FORMAT(orders.orderDate, "%Y %m") DESC) rang
+                                                                    FROM orderdetails
+                                                                    JOIN orders
+                                                                      ON orderdetails.orderNumber = orders.orderNumber
+                                                                    JOIN customers
+                                                                      ON orders.customerNumber = customers.customerNumber
+                                                                    GROUP BY pays, date
+                                                                    )
+                                        SELECT 
+                                        pays,
+                                        date,
+                                        CA 
+                                        FROM derniers_mois_pays
+                                        WHERE rang <= 2);
+
+
+-- Le stock des 5 produits les plus commandés (sans compter les commandes qui ont été annulées).
+
+CREATE OR REPLACE VIEW cinq_produits_plus_commandes AS (
+                                                        WITH produit_commandés AS (
+                                                                                    SELECT 
+                                                                                    productName,
+                                                                                    products.quantityInStock,
+                                                                                    SUM(orderdetails.quantityOrdered) qté_commande, 
+                                                                                    SUM(orderdetails.quantityOrdered*orderdetails.priceEach) ca,
+                                                                                    DENSE_RANK() OVER (ORDER BY sum(orderdetails.quantityOrdered) DESC) rang
+                                                                                    FROM products
+                                                                                    JOIN orderdetails 
+                                                                                      ON products.productCode = orderdetails.productCode
+                                                                                    JOIN orders
+                                                                                      ON orderdetails.orderNumber = orders.orderNumber
+                                                                                    WHERE orders.status != "Cancelled"
+                                                                                    GROUP BY productName, quantityInStock
+                                                                                    ORDER BY qté_commande DESC
+                                                                                    ) 
+                                                        SELECT 
+                                                        productName,
+                                                        quantityInStock,
+                                                        rang,
+                                                        qté_commande,
+                                                        ca
+                                                        FROM produit_commandés
+                                                        );
+    
+
+-- Chaque mois, les 2 vendeurs ayant réalisé le plus de chiffre d’affaires
+-- Pour le calcul, nous sommes partis sur la somme des paiements plutot que sur la somme des montants de commandes, pour tenir compte du CA exact.
+
+CREATE OR REPLACE VIEW deux_meilleurs_vendeurs AS (
+                                                    SELECT
+                                                    DATE_FORMAT(payments.paymentDate, "%Y %m") date, 
+                                                    employees.lastName, employees.firstName, 
+                                                    SUM(DISTINCT payments.amount) ca, 
+                                                    employees.officeCode,
+                                                    offices.city,
+                                                    DENSE_RANK() OVER (PARTITION BY DATE_FORMAT(payments.paymentDate, "%Y %m") ORDER BY sum(DISTINCT payments.amount) DESC) rang
+                                                    FROM payments
+                                                    JOIN customers 
+                                                      ON customers.customerNumber = payments.customerNumber
+                                                    JOIN employees 
+                                                      ON employees.employeeNumber = customers.salesRepEmployeeNumber
+                                                    JOIN offices
+                                                      ON employees.officeCode = offices.officeCode
+                                                    GROUP BY date, employees.employeeNumber, employees.officeCode,  offices.city
+                                                    ORDER BY date
+                                                  );
+
+
+-- Chaque mois, les 2 bureaux ayant réalisé le plus de chiffre d’affaires
+
+CREATE OR REPLACE VIEW deux_meilleurs_offices AS (
+                                                  SELECT 
+                                                  DATE_FORMAT(payments.paymentDate, "%Y %m") date, 
+                                                  offices.city ville, 
+                                                  offices.officeCode,
+                                                  SUM(DISTINCT payments.amount) ca, 
+                                                  DENSE_RANK() OVER (PARTITION BY DATE_FORMAT(payments.paymentDate, "%Y %m") ORDER BY sum(DISTINCT payments.amount) DESC) rang
+                                                  FROM payments
+                                                  JOIN customers 
+                                                    ON customers.customerNumber = payments.customerNumber
+                                                  JOIN employees 
+                                                    ON employees.employeeNumber = customers.salesRepEmployeeNumber 
+                                                  JOIN offices
+                                                    ON employees.officeCode = offices.officeCode
+                                                  GROUP BY date, offices.city, offices.officeCode
+                                                  ORDER BY date
+                                                  );		
+
+
+-- Calcul de la marge brute
+
+CREATE OR REPLACE VIEW marge_brute AS (
+                                        SELECT 
+                                        p.productCode,
+                                        p.productName,
+                                        p.productLine,
+                                        p.buyPrice,
+                                        p.MSRP,
+                                        od.priceEach,
+                                        (MSRP - buyPrice)*100/buyPrice marge_recommandée,
+                                        (priceEach - buyPrice)*100/buyPrice marge_réelle,
+                                        o.orderDate
+                                        FROM
+                                        products p
+                                        JOIN orderdetails od
+                                          ON p.productCode = od.productCode
+                                        JOIN orders o
+                                          ON od.orderNumber = o.orderNumber
+                                        );
+                                
