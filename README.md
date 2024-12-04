@@ -22,11 +22,19 @@ Nota bene : parfois, les indicateurs d'affaires ne sont pas techniquement réali
 
 **TOOLS**
 
-Le directeur ne souhaite pas faire de SQL, il veut pouvoir accéder aux données automatiquement et de manière graphique. Vous pouvez donc proposer un outil de votre choix (Power BI, Tableau...), tant que le tableau de bord est pertinent. Pour information, la base de données est disponible sur un serveur de l'entreprise. Vous pouvez y accéder en mode lecture seule avec un utilisateur fourni. L'entreprise vous fournit également le script que vous pouvez exécuter sur votre serveur MySQL local. Les données sont identiques, et s'arrêtent à la fin du mois précédent. Durant la semaine de la démo, les données seront mises à jour avec des données nouvelles et fraîches (et vous pourrez recevoir le script de mise à jour si vous le faites localement). La démo devrait donc afficher les données les plus récentes disponibles.
+Le directeur ne souhaite pas travailler avec SQL mais veut accéder aux données automatiquement et graphiquement. Vous pouvez proposer l’outil de votre choix (Power BI, Tableau, etc.), tant que le tableau de bord est pertinent.
+
+À titre d’information, la base de données est disponible sur un serveur de l’entreprise. Vous y accédez en mode lecture seule avec un compte utilisateur fourni.
+
+L’entreprise vous fournit également le script que vous pouvez exécuter sur votre serveur MySQL local. Les données sont identiques et s’arrêtent à la fin du mois précédent.
 
 **NOTES**
 
-Vous choisissez votre propre outil de reporting. Mais l'objectif est de pratiquer le SQL. Vous devez donc obtenir les données via des requêtes SQL. Par exemple, pour les "2 vendeurs ayant le plus haut chiffre d'affaires pour chaque mois" : Ce que nous souhaitons : une requête SQL ne présentant que les "2 vendeurs ayant le plus haut chiffre d'affaires pour chaque mois", et une visualisation de données pour montrer cela. Ce que nous ne voulons pas : une requête SQL avec tous les vendeurs, puis des filtres dans votre outil de reporting.
+Vous choisissez votre propre outil de reporting. Mais l'objectif est de pratiquer le SQL. Vous devez donc obtenir les données via des requêtes SQL. 
+
+Par exemple, pour les "2 vendeurs ayant le plus haut chiffre d'affaires pour chaque mois" : Ce que nous souhaitons : une requête SQL ne présentant que les "2 vendeurs ayant le plus haut chiffre d'affaires pour chaque mois", et une visualisation de données pour montrer cela. 
+
+Ce que nous ne voulons pas : une requête SQL avec tous les vendeurs, puis des filtres dans votre outil de reporting.
 
 **EXPECTED DELIVERABLE**
 
